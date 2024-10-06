@@ -11,9 +11,11 @@
 
 #include <cmath>
 
-void CANDY::HNSW::search(CANDY::DistanceQueryer& qdis, int k,
-						 std::vector<CANDY::VertexPtr>& I, float* D,
-						 CANDY::VisitedTable& vt) {
+void CANDY::HNSW::search(CANDY::DistanceQueryer& qdis, 
+		int k,
+		std::vector<CANDY::VertexPtr>& I, 
+		float* D,
+		CANDY::VisitedTable& vt) {
 	if (entry_point_ == nullptr) {
 		return;
 	}
@@ -50,8 +52,12 @@ void CANDY::HNSW::search(CANDY::DistanceQueryer& qdis, int k,
 }
 
 std::priority_queue<CANDY::HNSW::Node> search_from_candidates_unbounded(
-	CANDY::HNSW& hnsw, CANDY::HNSW::Node& node, CANDY::DistanceQueryer& qdis,
-	size_t ef, CANDY::VisitedTable& vt) {
+	CANDY::HNSW& hnsw, 
+	CANDY::HNSW::Node& node, 
+	CANDY::DistanceQueryer& qdis,
+	size_t ef, 
+	CANDY::VisitedTable& vt) {
+		
 	std::priority_queue<CANDY::HNSW::Node> top_candidates;
 	std::priority_queue<CANDY::HNSW::Node, std::vector<CANDY::HNSW::Node>,
 						std::greater<CANDY::HNSW::Node>>
@@ -103,10 +109,16 @@ std::priority_queue<CANDY::HNSW::Node> search_from_candidates_unbounded(
 	return top_candidates;
 }
 
-int search_from_candidates(CANDY::HNSW& hnsw, CANDY::DistanceQueryer& qdis,
-						   int k, std::vector<CANDY::VertexPtr>& I, float* D,
-						   CANDY::HNSW::MinimaxHeap& candidates,
-						   CANDY::VisitedTable& vt, int level, int nres_in) {
+int search_from_candidates(
+		CANDY::HNSW& hnsw, 
+		CANDY::DistanceQueryer& qdis,
+		int k, 
+		std::vector<CANDY::VertexPtr>& I, 
+		float* D,
+		CANDY::HNSW::MinimaxHeap& candidates,
+		CANDY::VisitedTable& vt, 
+		int level, 
+		int nres_in) {
 	int nres = nres_in;
 	auto efSearch = hnsw.efSearch;
 
@@ -175,13 +187,9 @@ int search_from_candidates(CANDY::HNSW& hnsw, CANDY::DistanceQueryer& qdis,
 				d = qdis(v1->id);
 			}
 			if (nres < k) {
-				// std::cout<<"pushing  "<<*v1<<" with dist= "<<d<<" to
-				// heap"<<std::endl;
 				faiss::heap_push<faiss::CMax<float, CANDY::VertexPtr>>(
 					++nres, D, I.data(), d, v1);
 			} else if (d < D[0]) {
-				// std::cout<<"pushing  "<<*v1<<" with dist= "<<d<<" to
-				// heap"<<std::endl;
 				faiss::heap_replace_top<faiss::CMax<float, CANDY::VertexPtr>>(
 					nres, D, I.data(), d, v1);
 			}
@@ -201,10 +209,13 @@ void CANDY::HNSW::neighbor_range(int level, size_t* begin, size_t* end) {
 	*end = cum_nb_neighbors(level + 1);
 }
 
-CANDY::VertexPtr greedy_update_nearest(CANDY::HNSW& hnsw,
-									   CANDY::DistanceQueryer& disq, int level,
-									   CANDY::VertexPtr nearest,
-									   float& d_nearest) {
+CANDY::VertexPtr greedy_update_nearest(
+		CANDY::HNSW& hnsw,
+		CANDY::DistanceQueryer& disq,
+		int level,
+		CANDY::VertexPtr nearest,
+		float& d_nearest) {
+			
 	for (;;) {
 		auto prev_nearest = nearest;
 		size_t begin;
@@ -247,15 +258,64 @@ CANDY::VertexPtr greedy_update_nearest(CANDY::HNSW& hnsw,
 	}
 }
 
-void CANDY::HNSW::add_with_locks(CANDY::DistanceQueryer& disq,
-								   int assigned_level, CANDY::VertexPtr pt_id,
-								   CANDY::VisitedTable& vt) {
-									
+// faiss concurrency control version, simple locks 
+void CANDY::HNSW::add_with_locks(
+		CANDY::DistanceQueryer& disq,
+		int assigned_level, 
+		CANDY::VertexPtr pt_id,
+		CANDY::VisitedTable& vt,
+		std::vector<std::mutex> locks) {
+			
+	auto nearest = entry_point_;
+	
+	// update global mean for LVQ
+	ntotal += 1;
+	if (opt_mode_ == OPT_LVQ) {
+		auto new_data = (*(pt_id->id)).contiguous().data_ptr<float>();
+		for (int64_t i = 0; i < vecDim_; i++) {
+			auto div = (new_data[i] - mean_[i]) / ntotal;
+			mean_[i] += div;
+		}
+	}
+	
+	// empty graph
+	if (nearest == nullptr) {
+		max_level_ = assigned_level;
+		entry_point_ = pt_id;
+		return;
+	}
+
+	locks[[pt_id]].lock();
+
+	// level from which to add neighbors
+	int level = max_level_;
+	float d_nearest = disq(nearest->id);
+	
+	// from top level to greedy search to assigned_level
+	disq.set_rank(false);
+	for (level = max_level_; level > assigned_level; level--) {
+		nearest = greedy_update_nearest(*this, disq, level, nearest, d_nearest);
+	}
+	
+	// start add neighbors
+	for (level = assigned_level; level >= 0; level--) {
+		add_links_starting_from(disq, pt_id, nearest, d_nearest, level, vt);
+	}
+	
+	locks[[pt_id]].unlock();
+	
+	if (assigned_level > (int)max_level_) {
+		max_level_ = assigned_level;
+		entry_point_ = pt_id;
+	}		
+							
 }
 
-void CANDY::HNSW::add_without_lock(CANDY::DistanceQueryer& disq,
-								   int assigned_level, CANDY::VertexPtr pt_id,
-								   CANDY::VisitedTable& vt) {
+void CANDY::HNSW::add_without_lock(
+		CANDY::DistanceQueryer& disq,
+		int assigned_level, 
+		CANDY::VertexPtr pt_id,
+		CANDY::VisitedTable& vt) {
 	auto nearest = entry_point_;
 	// update global mean for LVQ
 	ntotal += 1;
@@ -291,11 +351,12 @@ void CANDY::HNSW::add_without_lock(CANDY::DistanceQueryer& disq,
 	}
 }
 
-void CANDY::HNSW::add_links_starting_from(CANDY::DistanceQueryer& disq,
-										  CANDY::VertexPtr pt_id,
-										  CANDY::VertexPtr nearest,
-										  float d_nearest, int level,
-										  CANDY::VisitedTable& vt) {
+void CANDY::HNSW::add_links_starting_from(
+		CANDY::DistanceQueryer& disq,
+		CANDY::VertexPtr pt_id,
+		CANDY::VertexPtr nearest,
+		float d_nearest, int level,
+		CANDY::VisitedTable& vt) {
 	// maxheap to maintain link targets among neighbors of nearest
 	std::priority_queue<CANDY::HNSW::NodeDistCloser> link_targets;
 	search_neighbors_to_add(*this, disq, link_targets, nearest, d_nearest,
@@ -317,7 +378,6 @@ void CANDY::HNSW::add_links_starting_from(CANDY::DistanceQueryer& disq,
 			link_targets.pop();
 			continue;
 		}
-		// std::cout<< " adding link with " << *other_id<<std::endl;
 		add_link(*this, disq, pt_id, other_id, level);
 		neighbors.push_back(other_id);
 		link_targets.pop();
@@ -333,8 +393,12 @@ void CANDY::HNSW::add_links_starting_from(CANDY::DistanceQueryer& disq,
 	}
 }
 
-void add_link(CANDY::HNSW& hnsw, CANDY::DistanceQueryer& disq,
-			  CANDY::VertexPtr src, CANDY::VertexPtr dest, int level) {
+void add_link(
+		CANDY::HNSW& hnsw, 
+		CANDY::DistanceQueryer& disq,
+		CANDY::VertexPtr src, 
+		CANDY::VertexPtr dest, 
+		int level) {
 	size_t begin, end;
 	// auto nlist = hnsw.getNeighborsByPtr(src);
 	auto nlist = src->neighbors;
@@ -400,9 +464,9 @@ void add_link(CANDY::HNSW& hnsw, CANDY::DistanceQueryer& disq,
 }
 
 void hnsw_shrink_neighbor_list(
-	CANDY::DistanceQueryer& disq,
-	std::priority_queue<CANDY::HNSW::NodeDistCloser>& resultSet_prev,
-	size_t max_size) {
+		CANDY::DistanceQueryer& disq,
+		std::priority_queue<CANDY::HNSW::NodeDistCloser>& resultSet_prev,
+		size_t max_size) {
 	if (resultSet_prev.size() < max_size) {
 		return;
 	}
@@ -420,9 +484,10 @@ void hnsw_shrink_neighbor_list(
 }
 
 void shrink_neighbor_list(
-	CANDY::DistanceQueryer& disq,
-	std::priority_queue<CANDY::HNSW::NodeDistFarther>& input,
-	std::vector<CANDY::HNSW::NodeDistFarther>& output, size_t max_size) {
+		CANDY::DistanceQueryer& disq,
+		std::priority_queue<CANDY::HNSW::NodeDistFarther>& input,
+		std::vector<CANDY::HNSW::NodeDistFarther>& output, 
+		size_t max_size) {
 	while (input.size() > 0) {
 		CANDY::HNSW::NodeDistFarther v1 = input.top();
 		disq.set_query(*(v1.id->id));
@@ -449,10 +514,12 @@ void shrink_neighbor_list(
 }
 
 void search_neighbors_to_add(
-	CANDY::HNSW& hnsw, CANDY::DistanceQueryer& disq,
-	std::priority_queue<CANDY::HNSW::NodeDistCloser>& results,
-	CANDY::VertexPtr entry_point, float d_entry_point, int level,
-	CANDY::VisitedTable& vt) {
+		CANDY::HNSW& hnsw, CANDY::DistanceQueryer& disq,
+		std::priority_queue<CANDY::HNSW::NodeDistCloser>& results,
+		CANDY::VertexPtr entry_point, 
+		float d_entry_point, 
+		int level,
+		CANDY::VisitedTable& vt) {
 	// use a unbouneded minheap to contain candidates as search sets
 	std::priority_queue<CANDY::HNSW::NodeDistFarther> candidates;
 	CANDY::HNSW::NodeDistFarther ev(d_entry_point, entry_point);
@@ -554,8 +621,10 @@ void CANDY::HNSW::set_nb_neighbors(size_t layer_no, size_t nb) {
 	}
 }
 
-int CANDY::HNSW::prepare_level_tab(torch::Tensor& x, bool preset_levels,
-								   bool is_NSW) {
+int CANDY::HNSW::prepare_level_tab(
+		torch::Tensor& x, 
+		bool preset_levels,
+		bool is_NSW) {
 	size_t n = x.size(0);
 	if (preset_levels) {
 		printf("There is preset levels\n");
