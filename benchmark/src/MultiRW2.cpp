@@ -3,7 +3,8 @@
  * @Date: 9/30/2024, 9:52:55 PM
  * @LastEditors: Junyao Dong
  * @LastEditTime: 10/1/2024, 4:21:52 PM
- * Description: Benchmarking for multiple query and insert.
+ * Description: Benchmarking for multiple query and insert, only support HNSW in this version.
+ * 
  */
 
 #include <iostream>
@@ -28,17 +29,17 @@ static inline int64_t s_timeOutSeconds = -1;
 static inline void earlyTerminateTimerCallBack() {
 	INTELLI_ERROR(
 		"Force to terminate due to timeout in " + std::to_string(s_timeOutSeconds) + "seconds");
-	auto briefOutCfg = newConfigMap();
+	auto briefOutconf = newConfigMap();
 	double latency95 = 0;
-	briefOutCfg->edit("throughput", (int64_t) 0);
-	briefOutCfg->edit("recall", (int64_t) 0);
-	briefOutCfg->edit("throughputByElements", (int64_t) 0);
-	briefOutCfg->edit("95%latency(Insert)", latency95);
-	briefOutCfg->edit("pendingWrite", latency95);
-	briefOutCfg->edit("latencyOfQuery", (int64_t) 0);
-	briefOutCfg->edit("normalExit", (int64_t) 0);
-	briefOutCfg->toFile("onlineInsert_result.csv");
-	std::cout << "brief results\n" << briefOutCfg->toString() << std::endl;
+	briefOutconf->edit("throughput", (int64_t) 0);
+	briefOutconf->edit("recall", (int64_t) 0);
+	briefOutconf->edit("throughputByElements", (int64_t) 0);
+	briefOutconf->edit("95%latency(Insert)", latency95);
+	briefOutconf->edit("pendingWrite", latency95);
+	briefOutconf->edit("latencyOfQuery", (int64_t) 0);
+	briefOutconf->edit("normalExit", (int64_t) 0);
+	briefOutconf->toFile("onlineInsert_result.csv");
+	std::cout << "brief results\n" << briefOutconf->toString() << std::endl;
 	exit(-1);
 }
 
@@ -63,55 +64,65 @@ static inline void setEarlyTerminateTimer(int64_t seconds) {
 int main(int argc, char **argv) {
 
 	// 1. Load the configs
-	INTELLI::ConfigMapPtr cfg = newConfigMap();
-	if (cfg->fromCArg(argc, argv) == false) {
+	INTELLI::ConfigMapPtr conf = newConfigMap();
+	if (conf->fromCArg(argc, argv) == false) {
 		if (argc >= 2) {
 			std::string fileName = "";
 			fileName += argv[1];
-			if (inMap->fromFile(fileName)) {
+			if (conf->fromFile(fileName)) {
 				INTELLI_INFO("Load config from file " + fileName);
 			}
 		}
   	}
   
 	CANDY::DataLoaderTable dataLoaderTable;
-	std::string dataLoaderTag = cfg->tryString("dataLoaderTag", "random", true);
-	int64_t cutOffInSec = cfg->tryI64("cutOffTimeInSec", -1, true);
-	int64_t waitPendingWrite = cfg->tryI64("waitPendingWrite", 0, true);	
-	int64_t enableCoroutine = cfg->tryI64("enableCoroutine", 0, true);
-	int64_t threadCount = cfg->tryI64("threadCount", 10, true);
-	int64_t readThreadCount = cfg->tryI64("readThreadCount", 0, true);
-	if (readTaskNum > concurrencyNum) {
-		INTELLI_ERROR(
-			"ReadThreadCount %" PRId64 " cannot be greater than threadCount %" PRId64 ", readThreadCount is set to 0 by default."
-			readTaskNum, concurrencyNum);
-		readTaskNum = 0;
-	}
-	
-	int64_t initialRows = cfg->tryI64("initialRows", 0, true);
-	std::string indexType = cfg->tryString("indexType", "hnsw", true);
+	std::string dataLoaderTag = conf->tryString("dataLoaderTag", "random", true);
+	int64_t cutOffInSec = conf->tryI64("cutOffTimeInSec", -1, true);
+	int64_t waitPendingWrite = conf->tryI64("waitPendingWrite", 0, true);	
+	int64_t initialRows = conf->tryI64("initialRows", 0, true);
 
 	// 2. Create the data and query, and prepare initialTensor	
 	auto dataLoader = dataLoaderTable.findDataLoader(dataLoaderTag);
-	INTELLI_INFO("Data loader : " + dataLoaderTag);
+	// INTELLI_INFO("Data loader : %s.", dataLoaderTag);
 	if (dataLoader == nullptr) {
 		return -1;
 	}
 	
-	dataLoader->setConfig(cfg);
+	dataLoader->setConfig(conf);
 	auto dataTensorAll = dataLoader->getData().nan_to_num(0);
 	auto dataTensorInitial = dataTensorAll.slice(0, 0, initialRows);
-	auto dataTensorStreamAll = dataTensorAll.slice(0, initialRows, dataTensorAll.size(0));
-	auto queryTensorAll = dataLoader->getQuery().nan_to_num(0);	
-  
-	// 3. create index
+	auto dataTensorStream = dataTensorAll.slice(0, initialRows, dataTensorAll.size(0));
+	auto queryTensor = dataLoader->getQuery().nan_to_num(0);
+	int64_t batchSize = conf->tryI64("batchSize", dataTensorStream.size(0), true);
+	
+	// INTELLI_INFO(
+	// 	"Initial tensor: Demension = %s, data = %s.",
+	// 	std::to_string(dataTensorInitial.size(1)), 
+	// 	std::to_string(dataTensorInitial.size(0)));
+  	// INTELLI_INFO(
+	//   	"Streaming tensor: Demension = %s, data = %s, query = %s", 
+	// 	std::to_string(dataTensorStream.size(1)),
+	// 	std::to_string(dataTensorStream.size(0)),
+	// 	std::to_string(queryTensor.size(0)));
+	
+	// 3. create the timestamps
+	INTELLI::IntelliTimeStampGenerator timeStampGen;
+	conf->edit("streamingTupleCnt", (int64_t) dataTensorStream.size(0));
+	timeStampGen.setConfig(conf);
+	timeStamps = timeStampGen.getTimeStamps();
+	// INTELLI_INFO("TimeStampSize = " + std::to_string(timeStamps.size()));
+	
+	// 4. create index
+	// Concurrency control benchmarking only supports HNSW in this version.
 	CANDY::IndexTable indexTable;
+	std::string indexTag = conf->tryString("indexTag", "hnsw", true);
 	indexPtr = indexTable.getIndex(indexTag);
 	if (indexPtr == nullptr) {
 		return -1;
-	}	
+	}
+	indexPtr->setConfig(conf);
 	
-	// 4. streaming feed
+	// 5. streaming feed
 	uint64_t startRow = 0;
 	uint64_t endRow = startRow + batchSize;
 	uint64_t tNow = 0;
@@ -120,6 +131,7 @@ int main(int argc, char **argv) {
 	uint64_t tDone = 0;
 	uint64_t allRows = dataTensorStream.size(0);
 	
+	INTELLI_INFO("Load initial tensor.");
 	if (initialRows > 0) {
 		indexPtr->loadInitialTensor(dataTensorInitial);
   	}
@@ -133,7 +145,14 @@ int main(int argc, char **argv) {
 				
 		auto subTensor = dataTensorStream.slice(0, startRow, endRow);
 		
-		indexPtr->insertTensor(subTensor);
+		// Include read and write tasks 
+		// indexPtr->insertTensor(subTensor);
+		// indexPtr->searchTensor(subTensor);
+		
+		// indexPtr->initInsertTensor(subTensor);
+		// indexPtr->initSearchTensor(subTensor);
+		
+		indexPtr->exec();
 		
 		tp = chronoElapsedTime(start);
 		
@@ -150,13 +169,13 @@ int main(int argc, char **argv) {
 	}
 	tDone = chronoElapsedTime(start);
 	
-	if (waitPendingWrite) {
-		INTELLI_WARNING("There is pending write, wait first.");
-		auto startWP = std::chrono::high_resolution_clock::now();
-		indexPtr->waitPendingOperations();
-		pendingWriteTime = chronoElapsedTime(startWP);
-		INTELLI_INFO("Wait " + std::to_string(pendingWriteTime / 1000) + " ms for pending writings");
-	}
+	// if (waitPendingWrite) {
+	// 	INTELLI_WARNING("There is pending write, wait first.");
+	// 	auto startWP = std::chrono::high_resolution_clock::now();
+	// 	indexPtr->waitPendingOperations();
+	// 	pendingWriteTime = chronoElapsedTime(startWP);
+	// 	INTELLI_INFO("Wait " + std::to_string(pendingWriteTime / 1000) + " ms for pending writings");
+	// }
 
 	// 5. preocess results
 	INTELLI_INFO("Insert is done, let us validate the results");
@@ -192,7 +211,7 @@ int main(int argc, char **argv) {
 
 	// indexPtr->endHPC();
 	// indexPtr->isHPCStarted = false;
-	// auto briefOutCfg = newConfigMap();
-	// generateNormalResultCsv(briefOutCfg, "multiRW2_result.csv");
+	// auto briefOutconf = newConfigMap();
+	// generateNormalResultCsv(briefOutconf, "multiRW2_result.csv");
 	return 0;
 }

@@ -1,0 +1,14 @@
+key,value,type
+vecDim,768,I64
+vecVolume,100000,I64
+batchSize,4000,I64
+metricType,L2,String
+initialRows,50000,I64
+driftPosition,0,I64
+driftOffset,0,Double
+indexTag,hnsw,String
+querySize,100,I64
+cutOffTimeSeconds,14400,I64
+dataPath,datasets/DPR/DPR100KC4.fvecs,String
+queryPath,datasets/DPR/DPR10KC4Q.fvecs,String
+

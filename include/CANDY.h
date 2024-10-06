@@ -18,8 +18,8 @@
 * The api interface is torch::Tensor for both c++ and python, and we also include support for loading the following data formats from file
 * - *.fvecs, (http://corpus-texmex.irisa.fr/) using @ref FVECSDataLoader, a static public class function @ref tensorFromFVECS is also provided
 * - *.h5, *.hdf5 (https://github.com/HDFGroup/hdf5) using @ref HDF5DataLoader, a static public class function @ref tensorFromHDF5 is also provided
-    * - experimental feature, should using -DENABLE_HDF5=ON in cmake
-    * - not support compression yet
+	* - experimental feature, should using -DENABLE_HDF5=ON in cmake
+	* - not support compression yet
 * @section sec_name_index Built-in name tags
 * @subsection subsec_tag_index Of index approaches (Please go to class @ref IndexTable for more details)
  * - flat @ref FlatIndex
@@ -71,7 +71,7 @@
 *  - automatically conduct the IDE-full-replace over the template by your own name in cpp and h
 *  - define your own function
 *  - @note Please use this copy-and-replace policy rather than creat your own, unless you know the doxygen comment style
-    *  very well and can always keep it!!!
+	*  very well and can always keep it!!!
 *  - @warning  This copy-and-replace policy will also prevent from wrong parameter types of interface functions, please
 *  DO KEEP THE INTERFACE PARAMETER UNDER THE SAME TYPE!!!!!!!!!!!
 * - register our class with a tag to src/CANDY/IndexTable.cpp
@@ -188,6 +188,8 @@
 #include <Utils/IntelliTensorOP.hpp>
 #include <Utils/IntelliTimeStampGenerator.h>
 
+#include <CANDY/ThreadManager.h>
+#include <include/coroutine_config.h>
 /**
  * @}
  */

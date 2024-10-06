@@ -13,7 +13,6 @@
 #include <Utils/IntelliTensorOP.hpp>
 #include <faiss/IndexFlat.h>
 #include <tuple>
-#include <CANDY/InsertStrategy.h>
 
 namespace CANDY {
 
@@ -29,13 +28,10 @@ class AbstractIndex {
  protected:
 	faiss::MetricType faissMetric = faiss::METRIC_L2;
 	int64_t containerTier = 0;
-	
-	FuncStrategy* funcStrategy = nullptr;
-	
  public:
 	bool isHPCStarted = false;
-	AbstractIndex(FuncStrategy* strategy = nullptr) : funcStrategy(strategy) {
-
+	AbstractIndex() {
+		
 	}
 
 	~AbstractIndex() {
@@ -227,22 +223,3 @@ typedef std::shared_ptr<class CANDY::AbstractIndex> AbstractIndexPtr;
  */
 
 #endif //INTELLISTREAM_INCLUDE_CPPALGOS_ABSTRACTCPPALGO_H_
-
-
-// class AbstractIndex {
-// protected:
-//     SearchStrategy* searchStrategy;
-// public:
-//     AbstractIndex(SearchStrategy* strategy) : searchStrategy(strategy) {}
-
-//     virtual void search() {
-//         searchStrategy->search();  // 调用具体的搜索策略
-//     }
-
-//     // 可以在运行时更改搜索策略
-//     void setSearchStrategy(SearchStrategy* strategy) {
-//         searchStrategy = strategy;
-//     }
-
-//     virtual ~AbstractIndex() = default;
-// };

@@ -80,6 +80,10 @@ option(ENABLE_PYBIND
         "Enable original pybind and build CANDY python"
         OFF
 )
+option(ENABLE_COROUTINE
+        "Enable coroutine"
+        OFF)
+
 
 #OPTIONAL OPENCL
 if (NOT ENABLE_OPENCL)
@@ -181,6 +185,27 @@ configure_file(
         "${PROJECT_BINARY_DIR}/include/sptag_config.h"
 )
 
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/thirdparty/libco)
+if (NOT ENABLE_COROUTINE) 
+    set(CANDY_CORUTINE 0)
+    message(STATUS "Coroutine is not enabled")
+else ()
+    set(CANDY_CORUTINE 1)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/libco)
+    # find_library(libCO libcolib.so ./thirdparty/libco)
+    # include_directories(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libco)
+    # set(LIBRARIES ${LIBRARIES}  ./thirdparty/libco/libcolib.so)
+
+    find_library(libCO libcolib.so ${PROJECT_SOURCE_DIR}/thirdparty/libco)
+    set(LIBRARIES ${LIBRARIES} ${libCO})
+    
+    message(STATUS "Coroutine is enabled")
+endif ()
+configure_file(
+        "${PROJECT_SOURCE_DIR}/include/coroutine_config.h.in"
+        "${PROJECT_BINARY_DIR}/include/coroutine_config.h"
+)
+
 # Reset output directories for the rest of your project
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -197,7 +222,7 @@ message(STATUS "CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE}")
 #set(LIBRARIES ${LIBRARIES} ${Log4cxx_LIBRARY})
 
 
-option(ENABLE_UNIT_TESTS "Enable unit tests" ON)
+option(ENABLE_UNIT_TESTS "Enable unit tests" OFF)
 message(STATUS "Enable testing: ${ENABLE_UNIT_TESTS}")
 
 
@@ -230,18 +255,18 @@ target_include_directories(CANDY PUBLIC "thirdparty/SPTAG/AnnService")
 target_link_options(CANDY PUBLIC "-Wl,-rpath,./")
 target_link_options(CANDY PUBLIC "-Wl,-rpath,./")
 target_link_libraries(CANDY PUBLIC ${LIBRARIES})
+
 install(TARGETS CANDY LIBRARY DESTINATION .)
+
 #add_subdirectory(test)
 #Add benchmarks with command
 add_subdirectory(benchmark)
 set_property(TARGET benchmark PROPERTY CXX_STANDARD 20)
 #Add tests (based on GTest suits)
 #include(GoogleTest)
-
 if (ENABLE_UNIT_TESTS)
     add_subdirectory(test)
 endif ()
-
 if (NOT ENABLE_PYBIND)
     message(STATUS "I will NOT build original python package PyCANDY")
     set(CANDY_PYBIND 0)
@@ -270,3 +295,4 @@ message(STATUS "build path:" ${CMAKE_CURRENT_BINARY_DIR})
 set(source_directory "${CMAKE_SOURCE_DIR}/benchmark/datasets/")
 set(destination_directory "${CMAKE_BINARY_DIR}/benchmark/datasets/")
 file(COPY ${source_directory} DESTINATION ${destination_directory})
+

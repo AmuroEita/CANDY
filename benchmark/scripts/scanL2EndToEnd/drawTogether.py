@@ -47,7 +47,7 @@ matplotlib.rcParams['ps.useafm'] = True
 matplotlib.rcParams['pdf.use14corefonts'] = True
 matplotlib.rcParams['xtick.labelsize'] = TICK_FONT_SIZE
 matplotlib.rcParams['ytick.labelsize'] = TICK_FONT_SIZE
-matplotlib.rcParams['font.family'] = OPT_FONT_NAME
+# matplotlib.rcParams['font.family'] = OPT_FONT_NAME
 matplotlib.rcParams['pdf.fonttype'] = 42
 dataset_vecDim_mapping = {
     'DPR': 768,
@@ -310,13 +310,13 @@ def main():
     # aRowVec=[100, 200, 500, 1000]
     # add the algo tag here
     # algosVec = ['flat', 'LSH-H','flatAMMIP','flatAMMIPSMPPCA','PQ','IVFPQ','HNSW']
-    algosVec = ['flat', 'LSH-H', 'Flann','PQ', 'IVFPQ', 'onlinePQ', 'HNSW', 'NSW', 'NSG', 'nnDescent','DPG']
+    algosVec = ['HNSW']
     # algosVec = ['flat', 'LSH-H']
     # algosVec = ['flat', 'onlinePQ']
     # algosVec=['incrementalRaw']
     # algosVec=[ 'pq']
     # algoDisp = ['BrutalForce', 'PQ']
-    algoDisp = ['BrutalForce', 'LSH-H','Flann','PQ', 'IVFPQ', 'onlinePQ', 'HNSW', 'NSW', 'NSG', 'nnDescent','DPG']
+    algoDisp = ['HNSW']
     # algoDisp = ['BrutalForce', 'LSH-H','AMM(CRS)','AMM(PCA)','PQ','IVFPQ','HNSW']
     # algoDisp = ['BrutalForce', 'LSH-H']
     # algoDisp=['BrutalForce']

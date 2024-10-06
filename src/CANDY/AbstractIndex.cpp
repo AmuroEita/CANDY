@@ -21,9 +21,10 @@ bool CANDY::AbstractIndex::setConfig(INTELLI::ConfigMapPtr cfg) {
 	if (metricType == "dot" || metricType == "IP" || metricType == "cossim") {
 		faissMetric = faiss::METRIC_INNER_PRODUCT;
 	}
-
+	
 	return true;
 }
+
 bool CANDY::AbstractIndex::setConfigClass(INTELLI::ConfigMap cfg) {
 	INTELLI::ConfigMapPtr cfgPtr=newConfigMap();
 	cfgPtr->loadFrom(cfg);
@@ -35,7 +36,7 @@ bool CANDY::AbstractIndex::setFrozenLevel(int64_t frozenLv) {
 	return false;
 }
 
-bool CANDY::AbstractIndex::insertTensor(torch::Tensor &t, ) {
+bool CANDY::AbstractIndex::insertTensor(torch::Tensor &t) {
 	assert(t.size(1));
 	return false;
 }

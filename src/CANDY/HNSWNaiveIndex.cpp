@@ -46,7 +46,7 @@ bool CANDY::HNSWNaiveIndex::execInsertTensor(torch::Tensor &t) {
 		hnsw.levels_ = std::vector<int>(n, -1);
 		int max_level = hnsw.prepare_level_tab(t, false, is_NSW);
 
-		if (isNSW) {
+		if (is_NSW) {
 				// 
 				CANDY::VisitedTable vt;
 				auto qdis = new CANDY::DistanceQueryer(vecDim);
@@ -110,18 +110,17 @@ bool CANDY::HNSWNaiveIndex::execInsertTensor(torch::Tensor &t) {
 
 bool CANDY::HNSWNaiveIndex::insertTensor(torch::Tensor &t) {
 	
-		std::function<void()> func = std::bind(&CANDY::HNSWNaiveIndex::execInsertTensor, this, t);
+	std::function<bool(torch::Tensor&)> func = std::bind(&CANDY::HNSWNaiveIndex::execInsertTensor, this, t);
 
-		if (funcStrategy != nullptr) {
-				funcStrategy->exec(func)
-		} else {
-				INTELLI_ERROR("No function strategy set.");
-		}
-		return true;	
+	if (strategy != nullptr) {
+		strategy->execInsertTensor(func, t);
+	} else {
+		INTELLI_ERROR("No function strategy set.");
+	}
+	return true;	
 }
 
-std::vector<torch::Tensor> CANDY::HNSWNaiveIndex::searchTensor(torch::Tensor &q,
-																															 int64_t k) {
+std::vector<torch::Tensor> CANDY::HNSWNaiveIndex::searchTensor(torch::Tensor &q, int64_t k) {
 	CANDY::DistanceQueryer disq(vecDim);
 	disq.set_mode(opt_mode_, faissMetric);
 	disq.set_search(true);
