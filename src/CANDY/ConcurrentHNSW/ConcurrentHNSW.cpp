@@ -582,6 +582,7 @@ int CANDY::HNSW::random_level() {
 	}
 	return probs_of_layers_.size() - 1;
 }
+
 void CANDY::HNSW::set_probs(int64_t M, float levelMult) {
 	int nn = 0;
 	cum_nneighbor_per_level_.push_back(0);
